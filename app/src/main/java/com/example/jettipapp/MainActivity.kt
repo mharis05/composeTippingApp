@@ -2,7 +2,6 @@ package com.example.jettipapp
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
@@ -11,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,9 +22,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,10 +39,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import com.example.jettipapp.components.InputField
 import com.example.jettipapp.ui.theme.JetTipAppTheme
+import com.example.jettipapp.utils.calculateTotalPerPerson
+import com.example.jettipapp.utils.calculateTotalTip
 import com.example.jettipapp.widgets.RoundIconButton
 
 class MainActivity : ComponentActivity() {
@@ -47,7 +52,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             MyApp {
                 Column {
-                    TopHeader()
                     MainContent()
                 }
 
@@ -60,7 +64,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MyApp(content: @Composable () -> Unit) {
     JetTipAppTheme {
-        Surface(color = MaterialTheme.colorScheme.background) {
+        Surface(modifier = Modifier.fillMaxHeight(),
+            color = MaterialTheme.colorScheme.surface) {
             content()
         }
 
@@ -103,26 +108,47 @@ fun TopHeader(totalPerPerson: Double = 0.00) {
 @Preview
 @Composable
 fun MainContent() {
-    BillForm { billAmt ->
-        Log.d("AMT", "MainContent: $billAmt")
 
+    val splitByState = remember { mutableIntStateOf(1) }
+    val tipAmountState = remember { mutableDoubleStateOf(0.0) }
+    val intRange = 1..100
+
+    Column(modifier = Modifier.padding(all = 12.dp)) {
+        BillForm(splitByState = splitByState,
+            tipAmountState = tipAmountState,
+            range = intRange)
     }
+
 
 }
 
 @Composable
-fun BillForm(modifier: Modifier = Modifier, captureAmount: (String) -> Unit) {
+fun BillForm(
+    modifier: Modifier = Modifier,
+    splitByState: MutableState<Int>,
+    tipAmountState: MutableState<Double>,
+    range: IntRange
+) {
     val totalBillState = remember { mutableStateOf("") }
-    val splitValue = remember { mutableIntStateOf(1) }
     val validState = remember(totalBillState.value.trim()) {
         totalBillState.value.trim().isNotEmpty()
                 && totalBillState.value.toDoubleOrNull() != null
     }
+    val sliderPositionState = remember { mutableFloatStateOf(0f) }
+    val tipPercentage = (sliderPositionState.floatValue * 100).toInt()
+    val tipPercentageState = remember { mutableIntStateOf(tipPercentage) }
+    val errorMessageState = remember { mutableStateOf("") }
 
     val focusManager = LocalFocusManager.current
 
+    TopHeader(calculateTotalPerPerson(
+        totalBill = totalBillState.value.toDoubleOrNull() ?: 0.0,
+        splitBy = splitByState.value,
+        tipPercentage = tipPercentageState.intValue
+    ))
+
     Surface(
-        Modifier
+        modifier = modifier
             .padding(5.dp)
             .fillMaxWidth(),
         color = MaterialTheme.colorScheme.background,
@@ -132,12 +158,12 @@ fun BillForm(modifier: Modifier = Modifier, captureAmount: (String) -> Unit) {
     {
         // Start: Main Card
         Column(
-            modifier = Modifier.padding(5.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = modifier.padding(5.dp),
+//            horizontalAlignment = Alignment.CenterHorizontally,
 
             )
         {
-            InputField(modifier = Modifier.fillMaxWidth(),
+            InputField(modifier = modifier.fillMaxWidth(),
                 valueState = totalBillState,
                 labelId = "Enter Bill Amount",
                 enabled = true,
@@ -146,64 +172,151 @@ fun BillForm(modifier: Modifier = Modifier, captureAmount: (String) -> Unit) {
                     if (!validState) {
                         return@KeyboardActions
                     }
-                    captureAmount(totalBillState.value.trim())
+//                    captureAmount(totalBillState.value.trim())
                     focusManager.clearFocus()
                 })
-//            if (validState) { // Start: Split and Round Buttons
+            if (validState) { // Start: Split and Round Buttons
 
             Row(
-                modifier = Modifier
+                modifier = modifier
                     .fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start
             ) {
                 Text(
-                    "Split", modifier = Modifier
+                    "Split", modifier = modifier
                         .align(Alignment.CenterVertically)
                 )
                 Spacer(modifier = Modifier.width(120.dp))
                 Row(
-                    modifier = Modifier
+                    modifier = modifier
                         .padding(horizontal = 10.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                        .fillMaxWidth()
                 ) {
                     RoundIconButton(
                         imageVector = Icons.Default.Remove,
-                        onClick = { if (splitValue.intValue > 1) splitValue.intValue-- })
+                        onClick = {
+//                            if (splitValue.intValue > 1) splitValue.intValue--
+                            if(splitByState.value > range.first) {
+                                splitByState.value--
+                            }
+                        })
+
                     Text(
-                        splitValue.intValue.toString(),
-                        modifier = Modifier
+                        text = "${splitByState.value}",
+                        modifier = modifier
                             .padding(horizontal = 9.dp)
                             .align(Alignment.CenterVertically)
                     )
-                    RoundIconButton(modifier = Modifier,
+                    RoundIconButton(modifier = modifier,
                         imageVector = Icons.Default.Add,
-                        onClick = { splitValue.intValue++ })
+                        onClick = {
+//                            splitValue.intValue++
+                            if(splitByState.value < range.last) {
+                                splitByState.value++
+                            }
+                        })
                 }
             }
-//            } else {
-//                Box {}
-//            } // End: Split and Round Buttons
-            Row(                modifier = Modifier
-                .fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start) {
-                Text("Tip", modifier = Modifier.align(Alignment.CenterVertically))
-                Spacer(modifier = Modifier.width(120.dp))
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 10.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    Text("33", modifier = Modifier.align(Alignment.CenterVertically))
 
-                }
-
+            Row(modifier = Modifier
+                .padding(horizontal = 3.dp,
+                    vertical = 12.dp)) {
+                Text("Tip", modifier = modifier.align(Alignment.CenterVertically))
+                Spacer(modifier = Modifier.width(200.dp))
+                Text("$ ${tipAmountState.value}", modifier = Modifier.align(Alignment.CenterVertically))
             }
+
+            Column(verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally) {
+
+
+                Text(text = "${tipPercentageState.intValue} %",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = modifier.padding(8.dp))
+                Spacer(modifier = modifier.height(14.dp))
+
+                Slider(modifier = modifier
+                    .padding(horizontal = 16.dp),
+                    steps = 5
+                    , value = sliderPositionState.floatValue,
+                    onValueChange = {sliderVal ->
+                        if(totalBillState.value.isNotEmpty()) {
+                            sliderPositionState.floatValue = sliderVal
+                            // Set tip percentage state to the slider value converted to amount
+                            tipPercentageState.intValue = (sliderPositionState.floatValue * 100).toInt()
+                            // Calculate the total tip amount based on the bill and tip percentage
+                            tipAmountState.value = calculateTotalTip(totalBill = totalBillState.value.toDouble(), tipPercentage = tipPercentageState.intValue)
+                            errorMessageState.value = ""
+                        } else {
+                            //show inline error
+                            errorMessageState.value = "Please enter a valid bill amount"
+                        }
+                    })
+
+                if (errorMessageState.value.isNotEmpty()) {
+                    Text(
+                        text = errorMessageState.value,
+                        color = Color.Red,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+            } else {
+                Box {}
+            } // End: Split and Round Buttons
+
         } // End: Main Card
     }
 
 }
+
+
+
+@Preview(showBackground = true)
+@Composable
+fun TestCard() {
+    Row(modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.Start
+        ) {
+//            Row(modifier = Modifier
+//                .fillMaxWidth(),
+//                verticalAlignment = Alignment.Bottom) {
+                Text("Split")
+//            }
+        }
+
+        Column(modifier = Modifier
+            .weight(1f)
+            .fillMaxWidth(),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.Center) {
+            Row(modifier = Modifier.fillMaxWidth()
+                , horizontalArrangement = Arrangement.End) {
+                RoundIconButton(
+                    imageVector = Icons.Default.Remove,
+                    onClick = { true})
+                Text(
+                    1.toString(),
+                    modifier = Modifier
+                        .padding(horizontal = 9.dp)
+                        .align(Alignment.CenterVertically))
+                RoundIconButton(modifier = Modifier,
+                    imageVector = Icons.Default.Add,
+                    onClick = { true })
+            }
+        }
+
+    }
+}
+
+
 
 
 
